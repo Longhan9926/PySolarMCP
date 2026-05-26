@@ -10,6 +10,7 @@ services:
       SCAPS_RUNTIME_STRATEGY: ${SCAPS_RUNTIME_STRATEGY:-workspace_copy}
       WINE_BIN: ${WINE_DOCKER_BIN:-wine}
       WINEPREFIX: ${WINE_DOCKER_PREFIX:-/wineprefix}
+      WINEARCH: ${WINE_DOCKER_ARCH:-win32}
       SOLARCELL_SIM_XVFB: ${SOLARCELL_SIM_DOCKER_XVFB:-1}
     volumes:
       - ${SCAPS_HOST_DIR}:/scaps:ro

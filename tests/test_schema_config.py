@@ -59,6 +59,7 @@ SCAPS_WORKDIR={tmp_path / 'runs'} # inline comment
 SCAPS_RUNTIME_STRATEGY=workspace_copy
 WINE_BIN=wine-from-dotenv
 WINEPREFIX={wine_prefix}
+WINEARCH=win32
 SOLARCELL_SIM_XVFB=true
 """,
         encoding="utf-8",
@@ -73,6 +74,7 @@ SOLARCELL_SIM_XVFB=true
     assert options.runtime_strategy == "workspace_copy"
     assert options.wine_bin == "wine-from-dotenv"
     assert options.wine_prefix == wine_prefix
+    assert options.wine_arch == "win32"
     assert options.use_xvfb is True
 
 

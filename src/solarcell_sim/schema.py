@@ -57,6 +57,7 @@ class BackendOptions(SolarModel):
     definition_source: DefinitionSource | None = None
     wine_bin: str = "wine"
     wine_prefix: Path | None = None
+    wine_arch: str | None = None
     use_xvfb: bool | None = None
     xvfb_bin: str = "xvfb-run"
     timeout_seconds: int = 120

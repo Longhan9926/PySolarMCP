@@ -62,6 +62,21 @@ read-only for normal users. Use per-user or per-project writable directories for
 variables such as `SCAPS_HOST_DIR` are used for volume mounts; the Docker-specific
 variables such as `SCAPS_DOCKER_EXECUTABLE_PATH` must stay as container paths.
 
+For Wine, use a 32-bit prefix and install SCAPS through its Windows installer when
+possible. This lets the installer register bundled dependencies such as the NI
+LabWindows/CVI runtime (`cvirte.dll`). The SCAPS `setup.exe` bootstrapper can hang
+under Wine, so the setup helper uses the bundled `.msi` through `msiexec` when it is
+available:
+
+```bash
+uv run python scripts/setup_scaps_wine.py --installer /opt/scaps/ScapsInstallation/bin/dp/Scaps3310.msi
+```
+
+Passing `/opt/scaps/ScapsInstallation/setup.exe` is also supported; the helper will
+look for `bin/dp/*.msi` next to it first. If you only copied an already-installed SCAPS
+directory into `/opt/scaps`, make sure the directory also contains the runtime DLLs
+required by `scaps3310.exe` and `Scapsdll.dll`.
+
 ## Runner smoke test
 
 Use the smoke script to verify local SCAPS/Wine runner configuration:
@@ -72,7 +87,10 @@ uv run python scripts/smoke_scaps_runner.py --timeout-seconds 60
 ```
 
 The script reads `.env`, prepares a case from `examples/nip_baseline.json`, invokes the
-configured runner, and prints raw stdout/stderr plus parsed diagnostics.
+configured runner, and prints raw stdout/stderr plus parsed diagnostics. Some SCAPS/Wine
+combinations return a non-zero process code after writing a valid output file; the smoke
+script exits 0 for those parseable partial results by default. Add `--strict-exit-code`
+to make partial results fail the smoke command.
 
 ## Docker MCP server
 

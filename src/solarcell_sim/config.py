@@ -81,6 +81,8 @@ def _env_config(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
         wine["bin"] = value
     if value := environ.get("WINEPREFIX"):
         wine["prefix"] = value
+    if value := environ.get("WINEARCH"):
+        wine["arch"] = value
     if value := environ.get("SOLARCELL_SIM_XVFB"):
         wine["use_xvfb"] = value.lower() in {"1", "true", "yes", "on"}
     if wine:
@@ -116,6 +118,7 @@ def _options_from_config(config: dict[str, Any], backend: str) -> dict[str, Any]
         "runtime_strategy": backend_config.get("runtime_strategy"),
         "wine_bin": wine.get("bin"),
         "wine_prefix": wine.get("prefix"),
+        "wine_arch": wine.get("arch"),
         "use_xvfb": wine.get("use_xvfb"),
     }
     return {key: value for key, value in options.items() if value is not None}

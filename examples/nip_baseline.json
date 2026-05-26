@@ -1,5 +1,5 @@
 {
-  "name": "nip-baseline",
+  "name": "pin-baseline",
   "backend": "scaps",
   "backendOptions": {
     "runner": "wine",
@@ -9,19 +9,19 @@
     }
   },
   "device": {
-    "architecture": "n-i-p",
+    "architecture": "p-i-n",
     "layers": [
       {
-        "name": "ETL",
-        "role": "ETL",
-        "thicknessNm": 25,
+        "name": "HTL",
+        "role": "HTL",
+        "thicknessNm": 100,
         "material": {
-          "bandgapEv": 2.3,
-          "electronAffinityEv": 4.0,
-          "relativePermittivity": 9,
-          "electronMobilityCm2Vs": 0.01,
-          "holeMobilityCm2Vs": 0.001,
-          "donorDensityCm3": 1000000000000000000
+          "bandgapEv": 2.8,
+          "electronAffinityEv": 2.2,
+          "relativePermittivity": 3,
+          "electronMobilityCm2Vs": 0.001,
+          "holeMobilityCm2Vs": 0.01,
+          "acceptorDensityCm3": 1000000000000000000
         }
       },
       {
@@ -38,27 +38,37 @@
         }
       },
       {
-        "name": "HTL",
-        "role": "HTL",
-        "thicknessNm": 100,
+        "name": "ETL",
+        "role": "ETL",
+        "thicknessNm": 25,
         "material": {
-          "bandgapEv": 2.8,
-          "electronAffinityEv": 2.2,
-          "relativePermittivity": 3,
-          "electronMobilityCm2Vs": 0.001,
-          "holeMobilityCm2Vs": 0.01,
-          "acceptorDensityCm3": 1000000000000000000
+          "bandgapEv": 2.3,
+          "electronAffinityEv": 4.0,
+          "relativePermittivity": 9,
+          "electronMobilityCm2Vs": 0.01,
+          "holeMobilityCm2Vs": 0.001,
+          "donorDensityCm3": 1000000000000000000
         }
       }
     ],
-    "frontContact": {"name": "front"},
-    "backContact": {"name": "back"}
+    "frontContact": {
+      "name": "front"
+    },
+    "backContact": {
+      "name": "back"
+    }
   },
   "conditions": {
     "temperatureK": 300,
     "illumination": "AM1.5G",
     "incidentSide": "front",
-    "voltageScan": {"startV": 0, "stopV": 1.2, "stepV": 0.05}
+    "voltageScan": {
+      "startV": 0,
+      "stopV": 1.2,
+      "stepV": 0.05
+    }
   },
-  "measurements": ["JV"]
+  "measurements": [
+    "JV"
+  ]
 }

@@ -102,6 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--definition-path", type=Path, help="Override baseline .scaps path.")
     parser.add_argument("--workdir", type=Path, help="Override run workdir.")
     parser.add_argument("--log-chars", type=int, default=4000, help="Max stdout/stderr chars to print from each stream.")
+    parser.add_argument(
+        "--strict-exit-code",
+        action="store_true",
+        help="Return non-zero for partial results even when SCAPS produced parseable output.",
+    )
     args = parser.parse_args(argv)
 
     args.cwd = args.cwd.resolve()
@@ -137,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"runtime_strategy: {options.runtime_strategy}")
     print(f"wine_bin: {options.wine_bin}")
     print(f"wine_prefix: {options.wine_prefix}")
+    print(f"wine_arch: {options.wine_arch}")
     print(f"use_xvfb: {options.use_xvfb}")
     print(f"timeout_seconds: {options.timeout_seconds}")
 
@@ -203,7 +209,18 @@ def main(argv: list[str] | None = None) -> int:
         for artifact in result.artifacts:
             print(f"  - {artifact.type}: {artifact.path}")
 
-    return 0 if result.status == "success" else 6
+    if result.status == "success":
+        return 0
+    if (
+        result.status == "partial"
+        and not args.strict_exit_code
+        and raw.result_file is not None
+        and result.metrics is not None
+    ):
+        print("\nPartial result produced parseable metrics; treating smoke run as pass.")
+        print("Use --strict-exit-code to fail on partial runner status.")
+        return 0
+    return 6
 
 
 if __name__ == "__main__":

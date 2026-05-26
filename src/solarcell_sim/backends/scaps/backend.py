@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Literal
 
 from solarcell_sim.backends.scaps.parser import parse_scaps_iv_file
 from solarcell_sim.backends.scaps.renderer import ScapsDefinitionRenderer
@@ -179,7 +180,7 @@ class ScapsBackend:
 
     def parse_results(self, raw: RawRunResult, prepared: PreparedCase) -> SimulationResult:
         diagnostics = list(prepared.diagnostics) + list(raw.diagnostics)
-        artifacts = list(prepared.artifacts)
+        artifacts = self._archive_prepared_artifacts(prepared, diagnostics)
         metrics = None
         curves = SimulationCurves()
 
@@ -206,6 +207,12 @@ class ScapsBackend:
             status = "partial"
         else:
             status = "failed"
+
+        runtime_cleaned = False
+        if prepared.backend_options.runtime_strategy == "workspace_copy":
+            runtime_cleaned = self._cleanup_runtime(prepared, diagnostics)
+
+        self._update_manifest(prepared, status, artifacts, diagnostics, runtime_cleaned)
 
         return SimulationResult(
             run_id=prepared.run_id,
@@ -242,6 +249,96 @@ class ScapsBackend:
                 ArtifactRef(type="parsed_json", path=str(parsed_dir / "metrics.json")),
             ],
         )
+
+    def _archive_prepared_artifacts(self, prepared: PreparedCase, diagnostics: list[Diagnostic]) -> list[ArtifactRef]:
+        if prepared.backend_options.runtime_strategy != "workspace_copy":
+            return list(prepared.artifacts)
+
+        archived: list[ArtifactRef] = []
+        archive_dir = prepared.workdir / "raw" / "scaps_inputs"
+        for artifact in prepared.artifacts:
+            if artifact.type == "definition":
+                archived.append(
+                    self._copy_runtime_artifact(prepared.definition.path, archive_dir, "definition", diagnostics)
+                )
+            elif artifact.type == "script":
+                archived.append(
+                    self._copy_runtime_artifact(prepared.script.path, archive_dir, "script", diagnostics)
+                )
+            else:
+                archived.append(artifact)
+        return archived
+
+    def _copy_runtime_artifact(
+        self,
+        source: Path,
+        destination_dir: Path,
+        artifact_type: Literal["definition", "script"],
+        diagnostics: list[Diagnostic],
+    ) -> ArtifactRef:
+        destination = destination_dir / source.name
+        try:
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            if source.exists() and destination.resolve() != source.resolve():
+                shutil.copy2(source, destination)
+                return ArtifactRef(type=artifact_type, path=str(destination))
+        except OSError as exc:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    code="runtime.archive_failed",
+                    message=f"Failed to archive {artifact_type} artifact {source}: {exc}",
+                )
+            )
+        return ArtifactRef(type=artifact_type, path=str(source))
+
+    def _cleanup_runtime(self, prepared: PreparedCase, diagnostics: list[Diagnostic]) -> bool:
+        runtime_dir = prepared.workdir / "runtime"
+        if not runtime_dir.exists():
+            return True
+        try:
+            shutil.rmtree(runtime_dir)
+            return True
+        except OSError as exc:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    code="runtime.cleanup_failed",
+                    message=f"Failed to clean runtime directory {runtime_dir}: {exc}",
+                )
+            )
+            return False
+
+    def _update_manifest(
+        self,
+        prepared: PreparedCase,
+        status: str,
+        artifacts: list[ArtifactRef],
+        diagnostics: list[Diagnostic],
+        runtime_cleaned: bool,
+    ) -> None:
+        try:
+            manifest = {
+                "runId": prepared.run_id,
+                "backend": self.name,
+                "runner": prepared.backend_options.runner,
+                "status": status,
+                "workdir": str(prepared.workdir),
+                "runtimeStrategy": prepared.backend_options.runtime_strategy,
+                "runtimeCleaned": runtime_cleaned,
+                "inputHash": hash_file(prepared.workdir / "input" / "normalized_input.json"),
+                "artifacts": [item.model_dump(mode="json", by_alias=True) for item in artifacts],
+                "diagnostics": [item.model_dump(mode="json", by_alias=True) for item in diagnostics],
+            }
+            write_json(prepared.manifest_path, manifest)
+        except OSError as exc:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    code="manifest.update_failed",
+                    message=f"Failed to update manifest after parsing: {exc}",
+                )
+            )
 
     def _runner_for(self, config: BackendOptions):
         if config.runner == "direct":

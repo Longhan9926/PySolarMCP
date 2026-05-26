@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
-from solarcell_sim import check_backend, parse_results, prepare_case, validate_input
+from solarcell_sim import check_backend, parse_results, prepare_case, run_case, validate_input
 from solarcell_sim.api import prepare_case_internal
 from solarcell_sim.runners.wine import DirectScapsRunner
+from solarcell_sim.storage import read_json
 
 from tests.conftest import sample_case
 
@@ -51,6 +53,64 @@ def test_runner_materializes_sibling_runtime_files(baseline_definition: Path, tm
     assert runtime_executable == prepared.scaps_root / "scaps.exe"
     assert runtime_executable.exists()
     assert (prepared.scaps_root / "Scapsdll.dll").read_text(encoding="utf-8") == "dll"
+
+
+def test_runner_reports_partial_when_nonzero_exit_creates_output(baseline_definition: Path, tmp_path: Path) -> None:
+    scaps_dir = tmp_path / "scaps"
+    scaps_dir.mkdir()
+    executable = scaps_dir / "scaps.exe"
+    executable.write_text(
+        "#!/bin/sh\nmkdir -p results\nprintf 'fake output\\n' > results/pyscaps.out\nexit 6\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+
+    case = sample_case(baseline_definition, tmp_path / "runs", executable=executable)
+    prepared = prepare_case_internal(case)
+
+    raw = DirectScapsRunner().run(prepared, prepared.backend_options)
+
+    assert raw.status == "partial"
+    assert raw.return_code == 6
+    assert raw.result_file == prepared.result_file
+    assert raw.diagnostics[0].code == "runner.nonzero_exit"
+    assert raw.diagnostics[0].severity == "warning"
+
+
+def test_workspace_copy_runtime_is_cleaned_after_parse(baseline_definition: Path, tmp_path: Path) -> None:
+    fixture = Path(__file__).parent / "fixtures" / "scaps_sample_outputs" / "pyscaps.out"
+    scaps_dir = tmp_path / "scaps"
+    scaps_dir.mkdir()
+    executable = scaps_dir / "scaps.exe"
+    executable.write_text(
+        "#!/bin/sh\nmkdir -p results\ncp "
+        + shlex.quote(str(fixture))
+        + " results/pyscaps.out\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+
+    case = sample_case(baseline_definition, tmp_path / "runs", executable=executable)
+    case["backendOptions"]["runtimeStrategy"] = "workspace_copy"
+
+    result = run_case(case, cwd=tmp_path)
+    run_dir = tmp_path / "runs" / result.run_id
+    artifact_paths = {artifact.type: Path(artifact.path) for artifact in result.artifacts}
+    manifest = read_json(run_dir / "manifest.json")
+
+    assert result.status == "success"
+    assert not (run_dir / "runtime").exists()
+    assert artifact_paths["definition"].exists()
+    assert artifact_paths["script"].exists()
+    assert artifact_paths["raw_output"].exists()
+    assert artifact_paths["definition"].parent == run_dir / "raw" / "scaps_inputs"
+    assert artifact_paths["script"].parent == run_dir / "raw" / "scaps_inputs"
+    assert manifest["runtimeCleaned"] is True
+    assert all(
+        "/runtime/" not in item["path"]
+        for item in manifest["artifacts"]
+        if item["type"] in {"definition", "script", "raw_output", "parsed_csv", "parsed_json"}
+    )
 
 
 def test_check_backend_reports_missing_executable(baseline_definition: Path, tmp_path: Path) -> None:

@@ -58,6 +58,8 @@ class SubprocessScapsRunner:
         env = os.environ.copy()
         if config.wine_prefix is not None:
             env["WINEPREFIX"] = str(config.wine_prefix)
+        if config.wine_arch:
+            env["WINEARCH"] = config.wine_arch
 
         try:
             completed = subprocess.run(
@@ -93,14 +95,21 @@ class SubprocessScapsRunner:
             )
 
         result_file = prepared.result_file if prepared.result_file.exists() else None
-        status = "success" if completed.returncode == 0 and result_file else "failed"
+        if result_file is not None:
+            status = "success" if completed.returncode == 0 else "partial"
+        else:
+            status = "failed"
         diagnostics: list[Diagnostic] = []
         if completed.returncode != 0:
             diagnostics.append(
                 Diagnostic(
-                    severity="error",
+                    severity="warning" if result_file is not None else "error",
                     code="runner.nonzero_exit",
-                    message=f"SCAPS exited with code {completed.returncode}",
+                    message=(
+                        f"SCAPS exited with code {completed.returncode}"
+                        if result_file is None
+                        else f"SCAPS exited with code {completed.returncode} after creating output"
+                    ),
                 )
             )
         if result_file is None:
