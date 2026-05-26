@@ -17,15 +17,23 @@ from solarcell_sim.schema import (
     BackendStatus,
     Diagnostic,
     EnvironmentInfo,
+    ExecutionInfo,
     PreparedCase,
     RawRunResult,
     SimulationCurves,
+    SimulationOutput,
     SimulationInput,
     SimulationResult,
     ValidationReport,
 )
 from solarcell_sim.storage import create_run_id, hash_file, write_json
 from solarcell_sim.validators import validate_simulation_input
+
+
+def _read_text_if_present(path: Path | None) -> str | None:
+    if path is None or not path.exists():
+        return None
+    return path.read_text(encoding="ISO-8859-1", errors="replace")
 
 
 class ScapsBackend:
@@ -183,6 +191,7 @@ class ScapsBackend:
         artifacts = self._archive_prepared_artifacts(prepared, diagnostics)
         metrics = None
         curves = SimulationCurves()
+        raw_output_path: Path | None = None
 
         result_file = raw.result_file or prepared.result_file
         if result_file.exists():
@@ -191,6 +200,7 @@ class ScapsBackend:
             raw_copy = raw_dir / result_file.name
             if raw_copy.resolve() != result_file.resolve():
                 shutil.copy2(result_file, raw_copy)
+            raw_output_path = raw_copy
             artifacts.append(ArtifactRef(type="raw_output", path=str(raw_copy)))
             metrics, curves, parse_diagnostics = parse_scaps_iv_file(raw_copy, prepared.workdir / "parsed")
             diagnostics.extend(parse_diagnostics)
@@ -198,6 +208,8 @@ class ScapsBackend:
             if curves.jv is not None:
                 artifacts.append(ArtifactRef(type="parsed_csv", path=curves.jv.path))
             artifacts.append(ArtifactRef(type="parsed_json", path=str(prepared.workdir / "parsed" / "metrics.json")))
+
+        error_log_path = self._archive_error_log(raw, prepared, artifacts, diagnostics)
 
         if raw.status == "success" and metrics is not None:
             status = "success"
@@ -212,7 +224,21 @@ class ScapsBackend:
         if prepared.backend_options.runtime_strategy == "workspace_copy":
             runtime_cleaned = self._cleanup_runtime(prepared, diagnostics)
 
-        self._update_manifest(prepared, status, artifacts, diagnostics, runtime_cleaned)
+        output = SimulationOutput(
+            stdout=raw.stdout,
+            stderr=raw.stderr,
+            result_text=_read_text_if_present(raw_output_path),
+            error_log_text=_read_text_if_present(error_log_path),
+        )
+        execution = ExecutionInfo(
+            raw_status=raw.status,
+            return_code=raw.return_code,
+            result_file=str(raw_output_path) if raw_output_path else None,
+            error_log_file=str(error_log_path) if error_log_path else None,
+            runtime_cleaned=runtime_cleaned,
+        )
+
+        self._update_manifest(prepared, status, artifacts, diagnostics, execution)
 
         return SimulationResult(
             run_id=prepared.run_id,
@@ -230,6 +256,8 @@ class ScapsBackend:
                 wine_prefix=str(prepared.backend_options.wine_prefix) if prepared.backend_options.wine_prefix else None,
                 runner=prepared.backend_options.runner,
             ),
+            execution=execution,
+            output=output,
         )
 
     def parse_existing(self, output_path: Path, config: BackendOptions) -> SimulationResult:
@@ -248,6 +276,11 @@ class ScapsBackend:
                 ArtifactRef(type="raw_output", path=str(output_path)),
                 ArtifactRef(type="parsed_json", path=str(parsed_dir / "metrics.json")),
             ],
+            execution=ExecutionInfo(
+                raw_status="success" if metrics is not None else "failed",
+                result_file=str(output_path),
+            ),
+            output=SimulationOutput(result_text=_read_text_if_present(output_path)),
         )
 
     def _archive_prepared_artifacts(self, prepared: PreparedCase, diagnostics: list[Diagnostic]) -> list[ArtifactRef]:
@@ -292,6 +325,34 @@ class ScapsBackend:
             )
         return ArtifactRef(type=artifact_type, path=str(source))
 
+    def _archive_error_log(
+        self,
+        raw: RawRunResult,
+        prepared: PreparedCase,
+        artifacts: list[ArtifactRef],
+        diagnostics: list[Diagnostic],
+    ) -> Path | None:
+        if raw.error_log_file is None or not raw.error_log_file.exists():
+            return None
+
+        destination_dir = prepared.workdir / "raw" / "scaps_logs"
+        destination = destination_dir / raw.error_log_file.name
+        try:
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            if destination.resolve() != raw.error_log_file.resolve():
+                shutil.copy2(raw.error_log_file, destination)
+            artifacts.append(ArtifactRef(type="log", path=str(destination)))
+            return destination
+        except OSError as exc:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    code="runtime.archive_failed",
+                    message=f"Failed to archive SCAPS error log {raw.error_log_file}: {exc}",
+                )
+            )
+            return raw.error_log_file
+
     def _cleanup_runtime(self, prepared: PreparedCase, diagnostics: list[Diagnostic]) -> bool:
         runtime_dir = prepared.workdir / "runtime"
         if not runtime_dir.exists():
@@ -315,7 +376,7 @@ class ScapsBackend:
         status: str,
         artifacts: list[ArtifactRef],
         diagnostics: list[Diagnostic],
-        runtime_cleaned: bool,
+        execution: ExecutionInfo,
     ) -> None:
         try:
             manifest = {
@@ -325,7 +386,8 @@ class ScapsBackend:
                 "status": status,
                 "workdir": str(prepared.workdir),
                 "runtimeStrategy": prepared.backend_options.runtime_strategy,
-                "runtimeCleaned": runtime_cleaned,
+                "runtimeCleaned": execution.runtime_cleaned,
+                "execution": execution.model_dump(mode="json", by_alias=True),
                 "inputHash": hash_file(prepared.workdir / "input" / "normalized_input.json"),
                 "artifacts": [item.model_dump(mode="json", by_alias=True) for item in artifacts],
                 "diagnostics": [item.model_dump(mode="json", by_alias=True) for item in diagnostics],

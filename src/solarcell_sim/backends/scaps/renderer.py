@@ -23,6 +23,7 @@ def _command(value: Any, scaps_command: str) -> str | None:
 class ScapsDefinitionRenderer:
     script_name = "pyscaps.script"
     result_name = "pyscaps.out"
+    error_log_name = "SCAPSErrorLogFile.log"
 
     def render_definition(self, case: SimulationInput, scaps_root: Path) -> DefinitionArtifact:
         source = case.backend_options.definition_source
@@ -81,6 +82,9 @@ class ScapsDefinitionRenderer:
         commands = [
             "//Script file made by PySolarMCP",
             "set quitscript.quitSCAPS",
+            "set script_display_mode.fully_suppressed",
+            "set batch_display_mode.suppressed",
+            "set errorhandling.overwritefile",
             f"load allscapssettingsfile {definition_name}",
         ]
         warnings: list[Diagnostic] = []
@@ -130,7 +134,6 @@ class ScapsDefinitionRenderer:
                 f"action iv.startv {scan.start_v}",
                 f"action iv.stopv {scan.stop_v}",
                 f"action iv.increment {scan.step_v}",
-                "set errorhandling.overwritefile",
                 "calculate singleshot",
                 f"save results.iv {self.result_name}",
             ]

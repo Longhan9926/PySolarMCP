@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "PySolarMCP contributors" }]
 dependencies = [
+  "mcp>=1.0",
   "pydantic>=2.7",
 ]
 

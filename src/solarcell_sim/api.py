@@ -117,6 +117,19 @@ def run_case(case: SimulationInput | dict[str, Any], cwd: Path | None = None) ->
         return _error_result("run-error", "scaps", "unknown", "config_required", exc.diagnostics)
 
 
+def _aggregate_status(statuses: list[str]) -> str:
+    if not statuses:
+        return "failed"
+    unique = set(statuses)
+    if unique == {"success"}:
+        return "success"
+    if unique == {"config_required"}:
+        return "config_required"
+    if unique == {"failed"}:
+        return "failed"
+    return "partial"
+
+
 def _set_path(data: dict[str, Any], path: str, value: Any) -> dict[str, Any]:
     result = deepcopy(data)
     cursor: Any = result
@@ -155,7 +168,7 @@ def run_sweep(case: SimulationInput | dict[str, Any], cwd: Path | None = None) -
         row = result.model_dump(mode="json", by_alias=True)
         row["sweepValues"] = tags
         results.append(row)
-    return {"status": "success", "results": results}
+    return {"status": _aggregate_status([str(item.get("status")) for item in results]), "results": results}
 
 
 def parse_results(

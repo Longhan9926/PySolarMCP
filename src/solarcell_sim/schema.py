@@ -209,6 +209,21 @@ class EnvironmentInfo(SolarModel):
     runner: str | None = None
 
 
+class ExecutionInfo(SolarModel):
+    raw_status: Literal["success", "failed", "partial", "config_required"] | None = None
+    return_code: int | None = None
+    result_file: str | None = None
+    error_log_file: str | None = None
+    runtime_cleaned: bool = False
+
+
+class SimulationOutput(SolarModel):
+    stdout: str = ""
+    stderr: str = ""
+    result_text: str | None = None
+    error_log_text: str | None = None
+
+
 class SimulationResult(SolarModel):
     run_id: str
     backend: str
@@ -221,6 +236,8 @@ class SimulationResult(SolarModel):
     diagnostics: list[Diagnostic] = Field(default_factory=list)
     artifacts: list[ArtifactRef] = Field(default_factory=list)
     environment: EnvironmentInfo | None = None
+    execution: ExecutionInfo | None = None
+    output: SimulationOutput | None = None
 
 
 class BackendStatus(SolarModel):
@@ -267,5 +284,6 @@ class RawRunResult(SolarModel):
     stderr: str = ""
     return_code: int | None = None
     result_file: Path | None = None
+    error_log_file: Path | None = None
     diagnostics: list[Diagnostic] = Field(default_factory=list)
 

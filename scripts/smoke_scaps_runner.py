@@ -204,6 +204,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("metrics: none")
     _print_diagnostics(result.diagnostics)
+    if result.execution:
+        print("execution:")
+        for key, value in result.execution.model_dump(mode="json").items():
+            print(f"  {key}: {value}")
     if result.artifacts:
         print("artifacts:")
         for artifact in result.artifacts:

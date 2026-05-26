@@ -32,6 +32,37 @@ def _link_or_copy(src: Path, dst: Path, copy: bool) -> None:
         _copy_path(src, dst)
 
 
+SCAPS_ERROR_LOG_NAME = "SCAPSErrorLogFile.log"
+
+
+def _log_snippet(path: Path, limit: int = 600) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace").strip()
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _find_scaps_error_log(prepared: PreparedCase) -> Path | None:
+    candidates = [
+        prepared.scaps_root / SCAPS_ERROR_LOG_NAME,
+        prepared.scaps_root / "script" / SCAPS_ERROR_LOG_NAME,
+        prepared.scaps_root / "results" / SCAPS_ERROR_LOG_NAME,
+    ]
+    candidates.extend(sorted(prepared.scaps_root.glob(f"**/{SCAPS_ERROR_LOG_NAME}")))
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            if candidate.is_file() and candidate.stat().st_size > 0:
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
 class SubprocessScapsRunner:
     name = "subprocess"
 
@@ -95,8 +126,9 @@ class SubprocessScapsRunner:
             )
 
         result_file = prepared.result_file if prepared.result_file.exists() else None
+        error_log_file = _find_scaps_error_log(prepared)
         if result_file is not None:
-            status = "success" if completed.returncode == 0 else "partial"
+            status = "success" if completed.returncode == 0 and error_log_file is None else "partial"
         else:
             status = "failed"
         diagnostics: list[Diagnostic] = []
@@ -108,8 +140,19 @@ class SubprocessScapsRunner:
                     message=(
                         f"SCAPS exited with code {completed.returncode}"
                         if result_file is None
-                        else f"SCAPS exited with code {completed.returncode} after creating output"
+                        else (
+                            f"SCAPS exited with code {completed.returncode} after creating output; "
+                            "the SCAPS manual does not define this process code, so the output is returned"
+                        )
                     ),
+                )
+            )
+        if error_log_file is not None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning" if result_file is not None else "error",
+                    code="scaps.error_log",
+                    message=f"SCAPS wrote {error_log_file.name}: {_log_snippet(error_log_file)}",
                 )
             )
         if result_file is None:
@@ -128,6 +171,7 @@ class SubprocessScapsRunner:
             stderr=completed.stderr,
             return_code=completed.returncode,
             result_file=result_file,
+            error_log_file=error_log_file,
             diagnostics=diagnostics,
         )
 
