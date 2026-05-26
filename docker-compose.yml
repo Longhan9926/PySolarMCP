@@ -1,0 +1,18 @@
+services:
+  solarcell-sim-mcp:
+    build: .
+    image: solarcell-sim-mcp:latest
+    environment:
+      SOLARCELL_SIM_BACKEND: scaps
+      SCAPS_EXECUTABLE_PATH: /scaps/scaps.exe
+      SCAPS_DEFINITION_PATH: /definitions/baseline.scaps
+      SCAPS_WORKDIR: /runs
+      WINE_BIN: wine
+      WINEPREFIX: /wineprefix
+    volumes:
+      - ./external/scaps:/scaps:ro
+      - ./external/definitions:/definitions:ro
+      - ./runs:/runs
+      - ./wineprefix:/wineprefix
+    stdin_open: true
+    tty: false

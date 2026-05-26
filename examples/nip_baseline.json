@@ -1,0 +1,64 @@
+{
+  "name": "nip-baseline",
+  "backend": "scaps",
+  "backendOptions": {
+    "runner": "wine",
+    "definitionSource": {
+      "type": "baseline_file",
+      "path": "./external/definitions/baseline.scaps"
+    }
+  },
+  "device": {
+    "architecture": "n-i-p",
+    "layers": [
+      {
+        "name": "ETL",
+        "role": "ETL",
+        "thicknessNm": 25,
+        "material": {
+          "bandgapEv": 2.3,
+          "electronAffinityEv": 4.0,
+          "relativePermittivity": 9,
+          "electronMobilityCm2Vs": 0.01,
+          "holeMobilityCm2Vs": 0.001,
+          "donorDensityCm3": 1000000000000000000
+        }
+      },
+      {
+        "name": "Perovskite",
+        "role": "absorber",
+        "thicknessNm": 600,
+        "material": {
+          "bandgapEv": 1.55,
+          "electronAffinityEv": 3.9,
+          "relativePermittivity": 25,
+          "electronMobilityCm2Vs": 2,
+          "holeMobilityCm2Vs": 2,
+          "donorDensityCm3": 10000000000
+        }
+      },
+      {
+        "name": "HTL",
+        "role": "HTL",
+        "thicknessNm": 100,
+        "material": {
+          "bandgapEv": 2.8,
+          "electronAffinityEv": 2.2,
+          "relativePermittivity": 3,
+          "electronMobilityCm2Vs": 0.001,
+          "holeMobilityCm2Vs": 0.01,
+          "acceptorDensityCm3": 1000000000000000000
+        }
+      }
+    ],
+    "frontContact": {"name": "front"},
+    "backContact": {"name": "back"}
+  },
+  "conditions": {
+    "temperatureK": 300,
+    "illumination": "AM1.5G",
+    "incidentSide": "front",
+    "voltageScan": {"startV": 0, "stopV": 1.2, "stepV": 0.05}
+  },
+  "measurements": ["JV"]
+}

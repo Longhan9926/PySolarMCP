@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pysolarmcp"
+version = "0.1.0"
+description = "Python package and MCP server for SCAPS-backed solar cell simulations."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "PySolarMCP contributors" }]
+dependencies = [
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+solarcell-sim-mcp = "solarcell_sim_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"solarcell_sim.backends.scaps" = ["templates/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

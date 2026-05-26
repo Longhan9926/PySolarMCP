@@ -1,0 +1,14 @@
+.git
+.agents
+.codex
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+external/scaps
+external/definitions
+runs
+wineprefix
+dist
+build
+*.egg-info
