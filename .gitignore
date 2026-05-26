@@ -8,6 +8,11 @@ dist/
 build/
 *.egg-info/
 
+# Local environment files.
+.env
+.env.*
+!.env.example
+
 # User-provided SCAPS assets and generated runs.
 external/scaps/
 external/definitions/

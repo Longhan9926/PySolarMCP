@@ -4,6 +4,7 @@ from pathlib import Path
 
 from solarcell_sim import check_backend, parse_results, prepare_case, validate_input
 from solarcell_sim.api import prepare_case_internal
+from solarcell_sim.runners.wine import DirectScapsRunner
 
 from tests.conftest import sample_case
 
@@ -32,13 +33,34 @@ def test_prepare_case_copies_definition_and_generates_script(baseline_definition
     assert "save results.iv pyscaps.out" in script
 
 
+def test_runner_materializes_sibling_runtime_files(baseline_definition: Path, tmp_path: Path) -> None:
+    scaps_dir = tmp_path / "scaps"
+    scaps_dir.mkdir()
+    executable = scaps_dir / "scaps.exe"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
+    sibling_dll = scaps_dir / "Scapsdll.dll"
+    sibling_dll.write_text("dll", encoding="utf-8")
+
+    case = sample_case(baseline_definition, tmp_path / "runs", executable=executable)
+    case["backendOptions"]["runtimeStrategy"] = "workspace_copy"
+    prepared = prepare_case_internal(case)
+
+    runtime_executable = DirectScapsRunner().materialize_runtime(prepared, prepared.backend_options)
+
+    assert runtime_executable == prepared.scaps_root / "scaps.exe"
+    assert runtime_executable.exists()
+    assert (prepared.scaps_root / "Scapsdll.dll").read_text(encoding="utf-8") == "dll"
+
+
 def test_check_backend_reports_missing_executable(baseline_definition: Path, tmp_path: Path) -> None:
     status = check_backend(
         backend_options={
             "runner": "direct",
             "workdir": str(tmp_path / "runs"),
             "definitionSource": {"type": "baseline_file", "path": str(baseline_definition)},
-        }
+        },
+        cwd=tmp_path,
     )
 
     assert status.status == "config_required"

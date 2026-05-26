@@ -48,6 +48,32 @@ volumes:
 The P0 backend copies or links the SCAPS runtime into a per-run workspace, writes the
 generated script under `script/`, and reads `results/pyscaps.out`.
 
+Copy `.env.example` to `.env` for local configuration:
+
+```bash
+cp .env.example .env
+```
+
+For a shared machine install, place SCAPS under `/opt/scaps` and keep `/opt/scaps`
+read-only for normal users. Use per-user or per-project writable directories for
+`SCAPS_WORKDIR` and `WINEPREFIX`.
+
+`docker compose` reads `.env` automatically for variable substitution. The host path
+variables such as `SCAPS_HOST_DIR` are used for volume mounts; the Docker-specific
+variables such as `SCAPS_DOCKER_EXECUTABLE_PATH` must stay as container paths.
+
+## Runner smoke test
+
+Use the smoke script to verify local SCAPS/Wine runner configuration:
+
+```bash
+uv run python scripts/smoke_scaps_runner.py --prepare-only
+uv run python scripts/smoke_scaps_runner.py --timeout-seconds 60
+```
+
+The script reads `.env`, prepares a case from `examples/nip_baseline.json`, invokes the
+configured runner, and prints raw stdout/stderr plus parsed diagnostics.
+
 ## Docker MCP server
 
 Build the image:
@@ -78,6 +104,13 @@ Run over MCP stdio:
     }
   }
 }
+```
+
+With Docker Compose, configure `.env` and run:
+
+```bash
+docker compose build
+docker compose run --rm solarcell-sim-mcp --check
 ```
 
 The image includes Python, Wine, and Xvfb. It does not include SCAPS, baseline definition

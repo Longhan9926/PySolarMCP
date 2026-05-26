@@ -45,3 +45,73 @@ bin = "wine-from-project"
     assert options.definition_source is not None
     assert options.definition_source.path == baseline_definition
 
+
+def test_config_reads_project_dotenv(tmp_path: Path, baseline_definition: Path) -> None:
+    executable = tmp_path / "scaps.exe"
+    executable.write_text("", encoding="utf-8")
+    wine_prefix = tmp_path / "wineprefix"
+    (tmp_path / ".env").write_text(
+        f"""
+# Comments and optional export prefixes are supported.
+export SCAPS_EXECUTABLE_PATH={executable}
+SCAPS_DEFINITION_PATH="{baseline_definition}"
+SCAPS_WORKDIR={tmp_path / 'runs'} # inline comment
+SCAPS_RUNTIME_STRATEGY=workspace_copy
+WINE_BIN=wine-from-dotenv
+WINEPREFIX={wine_prefix}
+SOLARCELL_SIM_XVFB=true
+""",
+        encoding="utf-8",
+    )
+
+    options = load_backend_options("scaps", cwd=tmp_path)
+
+    assert options.executable_path == executable
+    assert options.definition_source is not None
+    assert options.definition_source.path == baseline_definition
+    assert options.workdir == tmp_path / "runs"
+    assert options.runtime_strategy == "workspace_copy"
+    assert options.wine_bin == "wine-from-dotenv"
+    assert options.wine_prefix == wine_prefix
+    assert options.use_xvfb is True
+
+
+def test_dotenv_relative_paths_resolve_from_cwd(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "SCAPS_EXECUTABLE_PATH=external/scaps/scaps.exe",
+                "SCAPS_DEFINITION_PATH=external/definitions/baseline.scaps",
+                "SCAPS_WORKDIR=runs",
+                "WINEPREFIX=wineprefix",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    options = load_backend_options("scaps", cwd=tmp_path)
+
+    assert options.executable_path == tmp_path / "external" / "scaps" / "scaps.exe"
+    assert options.definition_source is not None
+    assert options.definition_source.path == tmp_path / "external" / "definitions" / "baseline.scaps"
+    assert options.workdir == tmp_path / "runs"
+    assert options.wine_prefix == tmp_path / "wineprefix"
+
+
+def test_process_env_overrides_project_dotenv(monkeypatch, tmp_path: Path, baseline_definition: Path) -> None:
+    dotenv_exe = tmp_path / "dotenv.exe"
+    dotenv_exe.write_text("", encoding="utf-8")
+    env_exe = tmp_path / "env.exe"
+    env_exe.write_text("", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        f"SCAPS_EXECUTABLE_PATH={dotenv_exe}\nSCAPS_DEFINITION_PATH={baseline_definition}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SCAPS_EXECUTABLE_PATH", str(env_exe))
+
+    options = load_backend_options("scaps", cwd=tmp_path)
+
+    assert options.executable_path == env_exe
+    assert options.definition_source is not None
+    assert options.definition_source.path == baseline_definition
+

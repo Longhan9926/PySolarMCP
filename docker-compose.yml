@@ -3,16 +3,18 @@ services:
     build: .
     image: solarcell-sim-mcp:latest
     environment:
-      SOLARCELL_SIM_BACKEND: scaps
-      SCAPS_EXECUTABLE_PATH: /scaps/scaps.exe
-      SCAPS_DEFINITION_PATH: /definitions/baseline.scaps
-      SCAPS_WORKDIR: /runs
-      WINE_BIN: wine
-      WINEPREFIX: /wineprefix
+      SOLARCELL_SIM_BACKEND: ${SOLARCELL_SIM_BACKEND:-scaps}
+      SCAPS_EXECUTABLE_PATH: ${SCAPS_DOCKER_EXECUTABLE_PATH:-/scaps/scaps3310.exe}
+      SCAPS_DEFINITION_PATH: ${SCAPS_DOCKER_DEFINITION_PATH:-/definitions/baseline.scaps}
+      SCAPS_WORKDIR: ${SCAPS_DOCKER_WORKDIR:-/runs}
+      SCAPS_RUNTIME_STRATEGY: ${SCAPS_RUNTIME_STRATEGY:-workspace_copy}
+      WINE_BIN: ${WINE_DOCKER_BIN:-wine}
+      WINEPREFIX: ${WINE_DOCKER_PREFIX:-/wineprefix}
+      SOLARCELL_SIM_XVFB: ${SOLARCELL_SIM_DOCKER_XVFB:-1}
     volumes:
-      - ./external/scaps:/scaps:ro
-      - ./external/definitions:/definitions:ro
-      - ./runs:/runs
-      - ./wineprefix:/wineprefix
+      - ${SCAPS_HOST_DIR}:/scaps:ro
+      - ${SCAPS_DEFINITIONS_HOST_DIR}:/definitions:ro
+      - ${SCAPS_RUNS_HOST_DIR:-./runs}:/runs
+      - ${SCAPS_WINEPREFIX_HOST_DIR:-./wineprefix}:/wineprefix
     stdin_open: true
     tty: false

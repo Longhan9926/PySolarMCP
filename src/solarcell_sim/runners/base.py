@@ -13,16 +13,23 @@ def posix_to_wine_path(path: Path) -> str:
     return "Z:" + str(resolved).replace("/", "\\")
 
 
+def _copy_path(src: Path, dst: Path) -> None:
+    if src.is_dir():
+        shutil.copytree(src, dst)
+        return
+    shutil.copy2(src, dst)
+
+
 def _link_or_copy(src: Path, dst: Path, copy: bool) -> None:
     if dst.exists() or dst.is_symlink():
         return
     if copy:
-        shutil.copy2(src, dst)
+        _copy_path(src, dst)
         return
     try:
-        dst.symlink_to(src)
+        dst.symlink_to(src, target_is_directory=src.is_dir())
     except OSError:
-        shutil.copy2(src, dst)
+        _copy_path(src, dst)
 
 
 class SubprocessScapsRunner:
@@ -39,10 +46,13 @@ class SubprocessScapsRunner:
             return executable
 
         prepared.scaps_root.mkdir(parents=True, exist_ok=True)
+        if executable.parent.resolve() == prepared.scaps_root.resolve():
+            return executable
+
         copy_files = config.runtime_strategy == "workspace_copy"
-        runtime_executable = prepared.scaps_root / executable.name
-        _link_or_copy(executable, runtime_executable, copy=copy_files)
-        return runtime_executable
+        for source in executable.parent.iterdir():
+            _link_or_copy(source, prepared.scaps_root / source.name, copy=copy_files)
+        return prepared.scaps_root / executable.name
 
     def run_command(self, command: list[str], prepared: PreparedCase, config: BackendOptions) -> RawRunResult:
         env = os.environ.copy()
