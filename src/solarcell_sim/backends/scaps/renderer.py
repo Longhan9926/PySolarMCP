@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from solarcell_sim.backends.scaps.templates import resolve_template_definition
 from solarcell_sim.errors import ConfigurationError
 from solarcell_sim.schema import (
     DefinitionArtifact,
@@ -38,14 +39,22 @@ class ScapsDefinitionRenderer:
                     )
                 ],
             )
-        if source.type != "baseline_file":
+        if source.type == "template":
+            template = resolve_template_definition(source, case.device.architecture)
+            definition_dir = scaps_root / "def"
+            definition_dir.mkdir(parents=True, exist_ok=True)
+            target = definition_dir / template.definition_name
+            shutil.copy2(template.source_path, target)
+            return DefinitionArtifact(source_type=source.type, path=target, hash=hash_file(target))
+
+        if source.type == "generated":
             raise ConfigurationError(
-                f"Definition source {source.type!r} is not implemented in P0",
+                "Generated SCAPS definitions are not implemented",
                 [
                     Diagnostic(
                         severity="error",
                         code="scaps.definition_source_unsupported",
-                        message="P0 supports baseline_file definitions; generated/template sources are reserved for P1",
+                        message="Generated SCAPS definitions are reserved for a future renderer; use baseline_file or template.",
                     )
                 ],
             )
@@ -149,4 +158,3 @@ class ScapsDefinitionRenderer:
                 )
             )
         return commands, warnings
-

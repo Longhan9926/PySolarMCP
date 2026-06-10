@@ -79,8 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--case",
         type=Path,
-        default=REPO_ROOT / "examples" / "nip_baseline.json",
-        help="Simulation case JSON to run. Defaults to examples/nip_baseline.json.",
+        default=REPO_ROOT / "examples" / "pin_baseline.json",
+        help="Simulation case JSON to run. Defaults to examples/pin_baseline.json.",
     )
     parser.add_argument(
         "--cwd",

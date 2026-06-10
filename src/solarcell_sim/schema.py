@@ -40,13 +40,12 @@ class DefinitionSource(SolarModel):
     type: Literal["baseline_file", "generated", "template"] = "baseline_file"
     path: Path | None = None
     template_name: str | None = None
+    template_paths: dict[str, Path] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_source(self) -> "DefinitionSource":
         if self.type == "baseline_file" and self.path is None:
             raise ValueError("baseline_file definition source requires path")
-        if self.type == "template" and not self.template_name:
-            raise ValueError("template definition source requires templateName")
         return self
 
 
@@ -286,4 +285,3 @@ class RawRunResult(SolarModel):
     result_file: Path | None = None
     error_log_file: Path | None = None
     diagnostics: list[Diagnostic] = Field(default_factory=list)
-

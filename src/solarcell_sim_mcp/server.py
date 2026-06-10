@@ -5,12 +5,14 @@ import sys
 from typing import Any
 
 from solarcell_sim_mcp.tools import (
+    solarcell_apply_scaps_material_card,
+    solarcell_build_layer_material_from_card,
     solarcell_check_backend,
     solarcell_get_artifact,
+    solarcell_get_baseline_run,
     solarcell_parse_results,
     solarcell_prepare_case,
     solarcell_run_case,
-    solarcell_run_sweep,
     solarcell_validate_input,
 )
 
@@ -25,12 +27,14 @@ def build_server(host: str = "127.0.0.1", port: int = 31335, path: str = "/mcp")
 
     server = FastMCP("solarcell-sim", host=host, port=port, streamable_http_path=path)
     server.tool(name="solarcell_check_backend")(solarcell_check_backend)
+    server.tool(name="solarcell_get_baseline_run")(solarcell_get_baseline_run)
     server.tool(name="solarcell_validate_input")(solarcell_validate_input)
     server.tool(name="solarcell_prepare_case")(solarcell_prepare_case)
     server.tool(name="solarcell_run_case")(solarcell_run_case)
-    server.tool(name="solarcell_run_sweep")(solarcell_run_sweep)
     server.tool(name="solarcell_parse_results")(solarcell_parse_results)
     server.tool(name="solarcell_get_artifact")(solarcell_get_artifact)
+    server.tool(name="solarcell_build_layer_material_from_card")(solarcell_build_layer_material_from_card)
+    server.tool(name="solarcell_apply_scaps_material_card")(solarcell_apply_scaps_material_card)
     return server
 
 
@@ -65,4 +69,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

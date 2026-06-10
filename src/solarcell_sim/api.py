@@ -7,9 +7,11 @@ from typing import Any
 
 from pydantic import ValidationError as PydanticValidationError
 
+from solarcell_sim.baselines import get_baseline_case as build_baseline_case
 from solarcell_sim.backends.registry import get_backend
 from solarcell_sim.config import load_backend_options
-from solarcell_sim.errors import SolarCellSimError
+from solarcell_sim.errors import SolarCellSimError, ValidationError as SimulationValidationError
+from solarcell_sim.material_cards import apply_scaps_material_card, build_layer_material_from_card
 from solarcell_sim.schema import (
     ArtifactRef,
     BackendOptions,
@@ -54,6 +56,10 @@ def check_backend(
     return get_backend(backend).check_available(options)
 
 
+def get_baseline_case(architecture: str = "p-i-n", backend: str = "scaps") -> dict[str, Any]:
+    return build_baseline_case(architecture=architecture, backend=backend)
+
+
 def validate_input(case: SimulationInput | dict[str, Any]) -> ValidationReport:
     try:
         parsed = _coerce_case(case)
@@ -67,9 +73,13 @@ def validate_input(case: SimulationInput | dict[str, Any]) -> ValidationReport:
 
 
 def prepare_case(case: SimulationInput | dict[str, Any], cwd: Path | None = None) -> SimulationResult:
+    backend_name = "unknown"
+    runner = "unknown"
     try:
         parsed = _coerce_case(case)
+        backend_name = parsed.backend
         options = load_backend_options(parsed.backend, parsed.backend_options, cwd=cwd)
+        runner = options.runner
         prepared = get_backend(parsed.backend).prepare_case(parsed, options)
         return SimulationResult(
             run_id=prepared.run_id,
@@ -87,8 +97,10 @@ def prepare_case(case: SimulationInput | dict[str, Any], cwd: Path | None = None
             "failed",
             [Diagnostic(severity="error", code="schema.validation_error", message=str(exc))],
         )
+    except SimulationValidationError as exc:
+        return _error_result("validation-error", backend_name, runner, "failed", exc.diagnostics)
     except SolarCellSimError as exc:
-        return _error_result("prepare-error", "scaps", "unknown", "config_required", exc.diagnostics)
+        return _error_result("prepare-error", backend_name, runner, "config_required", exc.diagnostics)
 
 
 def prepare_case_internal(case: SimulationInput | dict[str, Any], cwd: Path | None = None) -> PreparedCase:
@@ -98,9 +110,13 @@ def prepare_case_internal(case: SimulationInput | dict[str, Any], cwd: Path | No
 
 
 def run_case(case: SimulationInput | dict[str, Any], cwd: Path | None = None) -> SimulationResult:
+    backend_name = "unknown"
+    runner = "unknown"
     try:
         parsed = _coerce_case(case)
+        backend_name = parsed.backend
         options = load_backend_options(parsed.backend, parsed.backend_options, cwd=cwd)
+        runner = options.runner
         backend = get_backend(parsed.backend)
         prepared = backend.prepare_case(parsed, options)
         raw = backend.run_case(prepared, options)
@@ -113,8 +129,10 @@ def run_case(case: SimulationInput | dict[str, Any], cwd: Path | None = None) ->
             "failed",
             [Diagnostic(severity="error", code="schema.validation_error", message=str(exc))],
         )
+    except SimulationValidationError as exc:
+        return _error_result("validation-error", backend_name, runner, "failed", exc.diagnostics)
     except SolarCellSimError as exc:
-        return _error_result("run-error", "scaps", "unknown", "config_required", exc.diagnostics)
+        return _error_result("run-error", backend_name, runner, "config_required", exc.diagnostics)
 
 
 def _aggregate_status(statuses: list[str]) -> str:
@@ -194,3 +212,28 @@ def get_artifact(run_id: str, artifact_type: str | None = None, backend_options:
         artifacts = [item for item in artifacts if item.get("type") == artifact_type]
     return {"status": "success", "runId": run_id, "artifacts": artifacts, "manifest": data}
 
+
+def build_layer_material_from_scaps_card(
+    card: dict[str, Any],
+    base_material: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return build_layer_material_from_card(card, base_material=base_material)
+
+
+def apply_scaps_material_card_to_case(
+    case: SimulationInput | dict[str, Any],
+    card: dict[str, Any],
+    *,
+    layer_name: str | None = None,
+    layer_index: int | None = None,
+    role: str | None = None,
+    preserve_existing: bool = True,
+) -> dict[str, Any]:
+    return apply_scaps_material_card(
+        case,
+        card,
+        layer_name=layer_name,
+        layer_index=layer_index,
+        role=role,
+        preserve_existing=preserve_existing,
+    )

@@ -6,6 +6,7 @@ from typing import Literal
 
 from solarcell_sim.backends.scaps.parser import parse_scaps_iv_file
 from solarcell_sim.backends.scaps.renderer import ScapsDefinitionRenderer
+from solarcell_sim.backends.scaps.templates import validate_template_source
 from solarcell_sim.config import load_backend_options
 from solarcell_sim.diagnostics import result_quality_diagnostics
 from solarcell_sim.errors import ConfigurationError, ValidationError
@@ -67,12 +68,14 @@ class ScapsBackend:
                     message="SCAPS baseline definition is not configured",
                 )
             )
-        elif source.type != "baseline_file":
+        elif source.type == "template":
+            diagnostics.extend(validate_template_source(source))
+        elif source.type == "generated":
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="scaps.definition_source_unsupported",
-                    message=f"Definition source {source.type!r} is reserved for a future renderer",
+                    message="Generated SCAPS definitions are reserved for a future renderer; use baseline_file or template.",
                 )
             )
         elif source.path is None or not source.path.exists():

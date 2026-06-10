@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import shutil
 import subprocess
 from pathlib import Path
@@ -33,6 +34,17 @@ def _link_or_copy(src: Path, dst: Path, copy: bool) -> None:
 
 
 SCAPS_ERROR_LOG_NAME = "SCAPSErrorLogFile.log"
+DISPLAY_FAILURE_PATTERNS = (
+    "nodrv_createwindow",
+    "application tried to create a window",
+    "make sure that your x server is running",
+    "display is set correctly",
+    "couldn't connect to x server",
+    "cannot open display",
+    "xvfb failed to start",
+    "xvfb-run: error",
+    "no protocol specified",
+)
 
 
 def _log_snippet(path: Path, limit: int = 600) -> str:
@@ -61,6 +73,67 @@ def _find_scaps_error_log(prepared: PreparedCase) -> Path | None:
         except OSError:
             continue
     return None
+
+
+def _display_failure_diagnostic(stdout: str | None, stderr: str | None) -> Diagnostic | None:
+    output = f"{stdout or ''}\n{stderr or ''}"
+    normalized = output.lower()
+    if not any(pattern in normalized for pattern in DISPLAY_FAILURE_PATTERNS):
+        return None
+
+    snippet = " ".join(output.split())
+    if len(snippet) > 600:
+        snippet = snippet[:597] + "..."
+    return Diagnostic(
+        severity="error",
+        code="runner.display_unavailable",
+        message=f"Wine/SCAPS could not access a working X display: {snippet}",
+    )
+
+
+def _kill_process_tree(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                process.kill()
+            except OSError:
+                pass
+        return
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except OSError:
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+
+def _collect_after_kill(process: subprocess.Popen) -> tuple[str, str]:
+    try:
+        stdout, stderr = process.communicate(timeout=5)
+        return stdout or "", stderr or ""
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except OSError:
+            pass
+        for pipe in (process.stdout, process.stderr):
+            if pipe is not None:
+                pipe.close()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        return "", ""
 
 
 class SubprocessScapsRunner:
@@ -92,30 +165,48 @@ class SubprocessScapsRunner:
         if config.wine_arch:
             env["WINEARCH"] = config.wine_arch
 
+        popen_kwargs = {}
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        else:
+            popen_kwargs["start_new_session"] = True
+
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 command,
                 cwd=prepared.scaps_root,
                 env=env,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=config.timeout_seconds,
-                check=False,
+                **popen_kwargs,
             )
-        except subprocess.TimeoutExpired as exc:
-            return RawRunResult(
-                run_id=prepared.run_id,
-                status="failed",
-                stdout=exc.stdout or "",
-                stderr=exc.stderr or "",
-                diagnostics=[
+            try:
+                stdout, stderr = process.communicate(timeout=config.timeout_seconds)
+            except subprocess.TimeoutExpired:
+                _kill_process_tree(process)
+                stdout, stderr = _collect_after_kill(process)
+                display_diagnostic = _display_failure_diagnostic(stdout, stderr)
+                diagnostics = [
                     Diagnostic(
                         severity="error",
                         code="runner.timeout",
-                        message=f"SCAPS execution timed out after {config.timeout_seconds} seconds",
+                        message=(
+                            f"SCAPS execution timed out after {config.timeout_seconds} seconds "
+                            "and the process tree was killed"
+                        ),
                     )
-                ],
-            )
+                ]
+                if display_diagnostic is not None:
+                    diagnostics.insert(0, display_diagnostic)
+                return RawRunResult(
+                    run_id=prepared.run_id,
+                    status="failed",
+                    stdout=stdout or "",
+                    stderr=stderr or "",
+                    diagnostics=diagnostics,
+                )
+            completed = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         except OSError as exc:
             return RawRunResult(
                 run_id=prepared.run_id,
@@ -132,6 +223,9 @@ class SubprocessScapsRunner:
         else:
             status = "failed"
         diagnostics: list[Diagnostic] = []
+        display_diagnostic = _display_failure_diagnostic(completed.stdout, completed.stderr)
+        if display_diagnostic is not None:
+            diagnostics.append(display_diagnostic)
         if completed.returncode != 0:
             diagnostics.append(
                 Diagnostic(
@@ -174,4 +268,3 @@ class SubprocessScapsRunner:
             error_log_file=error_log_file,
             diagnostics=diagnostics,
         )
-

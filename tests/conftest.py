@@ -13,6 +13,22 @@ def baseline_definition(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def template_definitions(tmp_path: Path) -> dict[str, Path]:
+    root = tmp_path / "templates"
+    pin_path = root / "pin.scaps"
+    nip_path = root / "nip.scaps"
+    pin_path.parent.mkdir(parents=True, exist_ok=True)
+    pin_path.write_text("p-i-n SCAPS template\n", encoding="utf-8")
+    nip_path.write_text("n-i-p SCAPS template\n", encoding="utf-8")
+    return {"p-i-n": pin_path, "n-i-p": nip_path}
+
+
+@pytest.fixture
+def sample_case_dict(baseline_definition: Path, tmp_path: Path) -> dict:
+    return sample_case(baseline_definition, tmp_path / "runs")
+
+
+@pytest.fixture
 def fake_executable(tmp_path: Path) -> Path:
     path = tmp_path / "scaps.exe"
     path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -74,4 +90,3 @@ def sample_case(baseline_definition: Path, workdir: Path, executable: Path | Non
         },
         "measurements": ["JV"],
     }
-

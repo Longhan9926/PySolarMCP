@@ -71,10 +71,28 @@ def _env_config(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
         scaps["executable_path"] = value
     if value := environ.get("SCAPS_WORKDIR"):
         scaps["workdir"] = value
-    if value := environ.get("SCAPS_DEFINITION_PATH"):
-        scaps["definition_source"] = {"type": "baseline_file", "path": value}
+    definition_source_type = (environ.get("SCAPS_DEFINITION_SOURCE") or "").strip() or None
+    template_paths: dict[str, str] = {}
+    if value := environ.get("SCAPS_TEMPLATE_PIN_PATH"):
+        template_paths["p-i-n"] = value
+    if value := environ.get("SCAPS_TEMPLATE_NIP_PATH"):
+        template_paths["n-i-p"] = value
+
+    if definition_source_type == "template" or (definition_source_type is None and template_paths):
+        definition_source: dict[str, Any] = {"type": "template"}
+        if value := environ.get("SCAPS_TEMPLATE_NAME"):
+            definition_source["template_name"] = value
+        if value := environ.get("SCAPS_TEMPLATE_ROOT"):
+            definition_source["path"] = value
+        if template_paths:
+            definition_source["template_paths"] = template_paths
+        scaps["definition_source"] = definition_source
+    elif value := environ.get("SCAPS_DEFINITION_PATH"):
+        scaps["definition_source"] = {"type": definition_source_type or "baseline_file", "path": value}
     if value := environ.get("SCAPS_RUNTIME_STRATEGY"):
         scaps["runtime_strategy"] = value
+    if value := environ.get("SCAPS_TIMEOUT_SECONDS"):
+        scaps["timeout_seconds"] = value
 
     wine: dict[str, Any] = {}
     if value := environ.get("WINE_BIN"):
@@ -104,6 +122,11 @@ def _resolve_option_paths(options: BackendOptions, cwd: Path) -> BackendOptions:
     options.wine_prefix = _resolve_path(options.wine_prefix, cwd)
     if options.definition_source is not None:
         options.definition_source.path = _resolve_path(options.definition_source.path, cwd)
+        options.definition_source.template_paths = {
+            key: resolved
+            for key, path in options.definition_source.template_paths.items()
+            if (resolved := _resolve_path(path, cwd)) is not None
+        }
     return options
 
 
@@ -116,6 +139,7 @@ def _options_from_config(config: dict[str, Any], backend: str) -> dict[str, Any]
         "workdir": backend_config.get("workdir"),
         "definition_source": backend_config.get("definition_source"),
         "runtime_strategy": backend_config.get("runtime_strategy"),
+        "timeout_seconds": backend_config.get("timeout_seconds"),
         "wine_bin": wine.get("bin"),
         "wine_prefix": wine.get("prefix"),
         "wine_arch": wine.get("arch"),
@@ -160,4 +184,3 @@ def load_backend_options(
         option_data["definition_source"] = DefinitionSource.model_validate(option_data["definition_source"])
 
     return _resolve_option_paths(BackendOptions.model_validate(option_data), cwd)
-

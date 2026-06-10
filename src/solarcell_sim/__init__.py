@@ -1,5 +1,6 @@
 from solarcell_sim.api import (
     check_backend,
+    get_baseline_case,
     get_artifact,
     parse_results,
     prepare_case,
@@ -13,6 +14,7 @@ __all__ = [
     "SimulationInput",
     "SimulationResult",
     "check_backend",
+    "get_baseline_case",
     "get_artifact",
     "parse_results",
     "prepare_case",

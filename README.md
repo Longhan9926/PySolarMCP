@@ -3,7 +3,7 @@
 PySolarMCP wraps solar-cell device simulation behind two surfaces:
 
 - `solarcell_sim`: a Python package for scripts, notebooks, optimizers, and tests.
-- `solarcell_sim_mcp`: a thin MCP adapter that exposes the same core API to agents.
+- `solarcell_sim_mcp`: a thin MCP adapter that exposes selected core API calls to agents.
 
 P0 focuses on SCAPS through a baseline `.scaps` definition plus a generated script. The
 runner and artifacts are intentionally designed so a later release can generate `.scaps`
@@ -20,7 +20,7 @@ from pathlib import Path
 from solarcell_sim import run_case
 from solarcell_sim.storage import read_json
 
-case = read_json(Path("examples/nip_baseline.json"))
+case = read_json(Path("examples/pin_baseline.json"))
 case.pop("backendOptions", None)  # use .env / project config
 
 result = run_case(case)
@@ -63,11 +63,26 @@ SCAPS_EXECUTABLE_PATH=/opt/scaps/Scaps3309/scaps3310.exe
 SCAPS_DEFINITION_PATH=/opt/scaps/Scaps3309/def/baseline.scaps
 SCAPS_WORKDIR=./runs
 SCAPS_RUNTIME_STRATEGY=workspace_copy
+SCAPS_TIMEOUT_SECONDS=120
 WINE_BIN=wine
 WINEPREFIX=./wineprefix
 WINEARCH=win32
 SOLARCELL_SIM_XVFB=1
 ```
+
+To choose a SCAPS definition by the case architecture, switch the definition source to
+template mode and provide one definition file per architecture:
+
+```env
+SCAPS_DEFINITION_SOURCE=template
+SCAPS_TEMPLATE_NAME=auto
+SCAPS_TEMPLATE_PIN_PATH=/opt/scaps/Scaps3309/def/pin.scaps
+SCAPS_TEMPLATE_NIP_PATH=/opt/scaps/Scaps3309/def/nip.scaps
+```
+
+With `SCAPS_TEMPLATE_NAME=auto`, `device.architecture: "p-i-n"` loads the p-i-n
+definition and `device.architecture: "n-i-p"` loads the n-i-p definition. A fixed
+`SCAPS_TEMPLATE_NAME` must match the case architecture.
 
 Use a 32-bit Wine prefix. `WINEARCH=win32` only matters when a prefix is first created;
 it will not convert an existing 64-bit prefix. Initialize the prefix and install the SCAPS
@@ -97,12 +112,15 @@ Then run SCAPS:
 uv run python scripts/smoke_scaps_runner.py --timeout-seconds 90
 ```
 
-The smoke script reads `.env`, prepares `examples/nip_baseline.json`, runs the configured
+The smoke script reads `.env`, prepares `examples/pin_baseline.json`, runs the configured
 backend, and prints raw stdout/stderr, parsed diagnostics, execution metadata, metrics,
 and artifact paths. Generated scripts follow the SCAPS manual's scripting guidance:
 messages are directed to `SCAPSErrorLogFile.log` with `set errorhandling.overwritefile`;
 if that log is written, it is archived under `raw/scaps_logs/` and surfaced as a
 diagnostic.
+
+Runner timeouts are enforced by killing the SCAPS process tree. Set
+`SCAPS_TIMEOUT_SECONDS` in `.env` or the service environment to cap each simulation run.
 
 For `SCAPS_RUNTIME_STRATEGY=workspace_copy`, each run copies the SCAPS runtime into a
 per-run workspace, then removes `runtime/` after parsing. Long-lived artifacts remain in:
@@ -128,9 +146,17 @@ Host-side local runtime variables:
 
 - `SCAPS_EXECUTABLE_PATH`: host path to `scaps3310.exe` or another SCAPS executable.
 - `SCAPS_DEFINITION_PATH`: host path to a baseline `.scaps` file.
+- `SCAPS_DEFINITION_SOURCE`: `baseline_file` or `template`; defaults to baseline mode
+  when `SCAPS_DEFINITION_PATH` is set.
+- `SCAPS_TEMPLATE_NAME`: `auto`, `p-i-n`, or `n-i-p`; `auto` selects from
+  `device.architecture`.
+- `SCAPS_TEMPLATE_PIN_PATH`, `SCAPS_TEMPLATE_NIP_PATH`: architecture-specific SCAPS
+  definition files used in template mode.
 - `SCAPS_WORKDIR`: persistent run directory.
 - `SCAPS_RUNTIME_STRATEGY`: `workspace_copy`, `workspace_link`, or `in_place`;
   `workspace_copy` is recommended for reproducible runs and Docker.
+- `SCAPS_TIMEOUT_SECONDS`: maximum seconds for each SCAPS run before the process tree is
+  killed.
 - `WINE_BIN`: Wine executable, default `wine`.
 - `WINEPREFIX`: writable Wine prefix containing SCAPS runtime dependencies.
 - `WINEARCH`: normally `win32` for SCAPS.
@@ -167,7 +193,10 @@ SCAPS_WINEPREFIX_HOST_DIR=./wineprefix
 
 SCAPS_DOCKER_EXECUTABLE_PATH=/scaps/scaps3310.exe
 SCAPS_DOCKER_DEFINITION_PATH=/definitions/baseline.scaps
+SCAPS_DOCKER_TEMPLATE_PIN_PATH=/definitions/pin.scaps
+SCAPS_DOCKER_TEMPLATE_NIP_PATH=/definitions/nip.scaps
 SCAPS_DOCKER_WORKDIR=/runs
+SCAPS_DOCKER_TIMEOUT_SECONDS=120
 WINE_DOCKER_PREFIX=/wineprefix
 WINE_DOCKER_ARCH=win32
 SOLARCELL_SIM_DOCKER_XVFB=1
@@ -265,9 +294,9 @@ argument, for example `scaps`, and send only the physical simulation case:
 {
   "backend": "scaps",
   "case": {
-    "name": "nip-baseline-jv",
+    "name": "pin-baseline-jv",
     "device": {
-      "architecture": "n-i-p",
+      "architecture": "p-i-n",
       "layers": [
         {
           "name": "absorber",
@@ -294,6 +323,22 @@ argument, for example `scaps`, and send only the physical simulation case:
 
 The remote server loads SCAPS executable paths, baseline definitions, Wine prefix,
 workdir, and runtime strategy from its `.env`, Docker environment, or server config.
+
+Recommended MCP flow for agents:
+
+1. Call `solarcell_get_baseline_run` with `architecture` set to `n-i-p` or `p-i-n`
+   when you need a server-safe baseline request to edit.
+2. Call `solarcell_validate_input` first.
+3. Call `solarcell_run_case` only when validation has no errors. Warnings are diagnostic
+   signals, not hard blockers.
+4. Do not immediately retry the same request after `mcp.run_busy`, `runner.timeout`, or
+   `schema.validation_error`; adjust the input or wait for the active run to finish.
+
+The MCP server accepts one SCAPS run at a time by default. Additional run requests return
+`mcp.run_busy` immediately instead of queueing behind a long calculation.
+MCP tool responses include `runPolicy.maxConcurrentRuns: 1` and
+`runPolicy.busyDiagnosticCode: "mcp.run_busy"` so clients can make this scheduling rule
+machine-readable.
 
 ### 4. Optional stdio mode
 

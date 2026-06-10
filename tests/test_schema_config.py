@@ -18,6 +18,15 @@ def test_schema_round_trips_camel_case(baseline_definition: Path, tmp_path: Path
     assert dumped["device"]["layers"][0]["thicknessNm"] == 25
 
 
+def test_backend_options_default_timeout_is_two_minutes(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("SCAPS_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    options = load_backend_options("scaps", cwd=tmp_path)
+
+    assert options.timeout_seconds == 120
+
+
 def test_config_priority_project_over_env(monkeypatch, tmp_path: Path, baseline_definition: Path) -> None:
     env_exe = tmp_path / "env.exe"
     env_exe.write_text("", encoding="utf-8")
@@ -61,6 +70,7 @@ WINE_BIN=wine-from-dotenv
 WINEPREFIX={wine_prefix}
 WINEARCH=win32
 SOLARCELL_SIM_XVFB=true
+SCAPS_TIMEOUT_SECONDS=75
 """,
         encoding="utf-8",
     )
@@ -76,6 +86,34 @@ SOLARCELL_SIM_XVFB=true
     assert options.wine_prefix == wine_prefix
     assert options.wine_arch == "win32"
     assert options.use_xvfb is True
+    assert options.timeout_seconds == 75
+
+
+def test_config_reads_template_definition_paths(tmp_path: Path) -> None:
+    (tmp_path / "definitions").mkdir()
+    pin_template = tmp_path / "definitions" / "pin.scaps"
+    nip_template = tmp_path / "definitions" / "nip.scaps"
+    pin_template.write_text("pin\n", encoding="utf-8")
+    nip_template.write_text("nip\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "SCAPS_DEFINITION_SOURCE=template",
+                "SCAPS_TEMPLATE_NAME=auto",
+                "SCAPS_TEMPLATE_PIN_PATH=definitions/pin.scaps",
+                "SCAPS_TEMPLATE_NIP_PATH=definitions/nip.scaps",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    options = load_backend_options("scaps", cwd=tmp_path)
+
+    assert options.definition_source is not None
+    assert options.definition_source.type == "template"
+    assert options.definition_source.template_name == "auto"
+    assert options.definition_source.template_paths["p-i-n"] == pin_template
+    assert options.definition_source.template_paths["n-i-p"] == nip_template
 
 
 def test_dotenv_relative_paths_resolve_from_cwd(tmp_path: Path) -> None:
@@ -116,4 +154,3 @@ def test_process_env_overrides_project_dotenv(monkeypatch, tmp_path: Path, basel
     assert options.executable_path == env_exe
     assert options.definition_source is not None
     assert options.definition_source.path == baseline_definition
-

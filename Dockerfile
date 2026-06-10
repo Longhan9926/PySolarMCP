@@ -7,9 +7,12 @@ RUN dpkg --add-architecture i386 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml README.md /app/
+COPY pyproject.toml /app/
+RUN python -c "import subprocess, sys, tomllib; data = tomllib.load(open('pyproject.toml', 'rb')); deps = data['project']['dependencies']; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', *deps])"
+
+COPY README.md /app/
 COPY src /app/src
-RUN pip install --no-cache-dir ".[mcp]"
+ENV PYTHONPATH=/app/src
 
 ENV SOLARCELL_SIM_BACKEND=scaps
 ENV SCAPS_EXECUTABLE_PATH=/scaps/scaps.exe
