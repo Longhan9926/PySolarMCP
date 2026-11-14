@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from solarcell_sim.config import load_backend_options
 from solarcell_sim.schema import SimulationInput
 
@@ -154,3 +157,27 @@ def test_process_env_overrides_project_dotenv(monkeypatch, tmp_path: Path, basel
     assert options.executable_path == env_exe
     assert options.definition_source is not None
     assert options.definition_source.path == baseline_definition
+
+
+def test_schema_rejects_unimplemented_backend_placeholders(baseline_definition: Path, tmp_path: Path) -> None:
+    case = sample_case(baseline_definition, tmp_path / "runs")
+    case["backend"] = "wxamps"
+
+    with pytest.raises(ValidationError):
+        SimulationInput.model_validate(case)
+
+
+def test_schema_rejects_generated_definition_source(baseline_definition: Path, tmp_path: Path) -> None:
+    case = sample_case(baseline_definition, tmp_path / "runs")
+    case["backendOptions"]["definitionSource"] = {"type": "generated"}
+
+    with pytest.raises(ValidationError):
+        SimulationInput.model_validate(case)
+
+
+def test_schema_rejects_unimplemented_measurements(baseline_definition: Path, tmp_path: Path) -> None:
+    case = sample_case(baseline_definition, tmp_path / "runs")
+    case["measurements"] = ["QE"]
+
+    with pytest.raises(ValidationError):
+        SimulationInput.model_validate(case)

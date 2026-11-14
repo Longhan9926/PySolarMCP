@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
@@ -15,7 +15,7 @@ COPY src /app/src
 ENV PYTHONPATH=/app/src
 
 ENV SOLARCELL_SIM_BACKEND=scaps
-ENV SCAPS_EXECUTABLE_PATH=/scaps/scaps.exe
+ENV SCAPS_EXECUTABLE_PATH=/scaps/scaps3310.exe
 ENV SCAPS_DEFINITION_PATH=/definitions/baseline.scaps
 ENV SCAPS_WORKDIR=/runs
 ENV WINE_BIN=wine

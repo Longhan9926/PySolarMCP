@@ -13,13 +13,10 @@ from solarcell_sim.config import load_backend_options
 from solarcell_sim.errors import SolarCellSimError, ValidationError as SimulationValidationError
 from solarcell_sim.material_cards import apply_scaps_material_card, build_layer_material_from_card
 from solarcell_sim.schema import (
-    ArtifactRef,
     BackendOptions,
     BackendStatus,
     Diagnostic,
     PreparedCase,
-    RawRunResult,
-    SimulationCurves,
     SimulationInput,
     SimulationResult,
     ValidationReport,
@@ -43,16 +40,12 @@ def _coerce_case(case: SimulationInput | dict[str, Any]) -> SimulationInput:
     return SimulationInput.model_validate(case)
 
 
-def _coerce_options(options: BackendOptions | dict[str, Any] | None) -> BackendOptions | dict[str, Any] | None:
-    return options
-
-
 def check_backend(
     backend: str = "scaps",
     backend_options: BackendOptions | dict[str, Any] | None = None,
     cwd: Path | None = None,
 ) -> BackendStatus:
-    options = load_backend_options(backend, _coerce_options(backend_options), cwd=cwd)
+    options = load_backend_options(backend, backend_options, cwd=cwd)
     return get_backend(backend).check_available(options)
 
 
@@ -195,12 +188,12 @@ def parse_results(
     backend_options: BackendOptions | dict[str, Any] | None = None,
     cwd: Path | None = None,
 ) -> SimulationResult:
-    options = load_backend_options(backend, _coerce_options(backend_options), cwd=cwd)
+    options = load_backend_options(backend, backend_options, cwd=cwd)
     return get_backend(backend).parse_existing(Path(output_path), options)
 
 
 def get_artifact(run_id: str, artifact_type: str | None = None, backend_options: BackendOptions | dict[str, Any] | None = None) -> dict[str, Any]:
-    options = load_backend_options("scaps", _coerce_options(backend_options))
+    options = load_backend_options("scaps", backend_options)
     if options.workdir is None:
         return {"status": "config_required", "diagnostics": ["SCAPS workdir is not configured"]}
     manifest = options.workdir / run_id / "manifest.json"

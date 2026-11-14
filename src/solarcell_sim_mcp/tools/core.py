@@ -6,6 +6,7 @@ from typing import Any
 
 from solarcell_sim import api
 from solarcell_sim.schema import Diagnostic
+from solarcell_sim_mcp import mock
 
 
 _RUN_LOCK = threading.Lock()
@@ -77,6 +78,10 @@ def solarcell_check_backend(backend: str = "scaps") -> dict[str, Any]:
     environment or config files. For SCAPS, only one solarcell_run_case call may
     run at a time; concurrent run requests return mcp.run_busy and are not queued.
     """
+    if mock.enabled():
+        payload = mock.check_backend(backend=backend)
+        payload["runPolicy"] = _run_policy(backend)
+        return payload
     status = api.check_backend(backend=backend)
     payload = status.model_dump(mode="json", by_alias=True)
     payload["runPolicy"] = _run_policy(backend)
@@ -91,6 +96,10 @@ def solarcell_get_baseline_run(architecture: str = "p-i-n", backend: str = "scap
     solarcell_run_case; server-side configuration supplies SCAPS paths. For
     SCAPS, run calls are serialized and concurrent requests return mcp.run_busy.
     """
+    if mock.enabled():
+        payload = mock.get_baseline_run(architecture=architecture, backend=backend)
+        payload["runPolicy"] = _run_policy(backend)
+        return payload
     try:
         case = api.get_baseline_case(architecture=architecture, backend=backend)
     except ValueError as exc:
@@ -123,12 +132,18 @@ def solarcell_validate_input(case: dict[str, Any], backend: str | None = None) -
     Do not send backendOptions from an MCP client; any supplied backendOptions are
     ignored so the remote server remains the source of runtime configuration.
     """
+    if mock.enabled():
+        return mock.validate_input(_mcp_case(case, backend=backend), backend=backend)
     report = api.validate_input(_mcp_case(case, backend=backend))
     return _hide_backend_options(report.model_dump(mode="json", by_alias=True))
 
 
 def solarcell_prepare_case(case: dict[str, Any], backend: str | None = None) -> dict[str, Any]:
     """Prepare a simulation case using server-side backend configuration."""
+    if mock.enabled():
+        payload = mock.prepare_case(_mcp_case(case, backend=backend), backend=backend)
+        payload["runPolicy"] = _run_policy(backend or payload.get("backend") or "scaps")
+        return payload
     result = api.prepare_case(_mcp_case(case, backend=backend))
     return result.model_dump(mode="json", by_alias=True)
 
@@ -147,6 +162,10 @@ def solarcell_run_case(case: dict[str, Any], backend: str | None = None) -> dict
     """
     prepared_case = _mcp_case(case, backend=backend)
     selected_backend = str(prepared_case.get("backend") or "scaps")
+    if mock.enabled():
+        payload = mock.run_case(prepared_case, backend=backend)
+        payload["runPolicy"] = _run_policy(selected_backend)
+        return payload
     if not _RUN_LOCK.acquire(blocking=False):
         return _run_busy_result(selected_backend)
     try:
@@ -160,12 +179,16 @@ def solarcell_run_case(case: dict[str, Any], backend: str | None = None) -> dict
 
 def solarcell_parse_results(output_path: str, backend: str = "scaps") -> dict[str, Any]:
     """Parse an existing output file with server-side backend configuration."""
+    if mock.enabled():
+        return mock.parse_results(output_path, backend=backend)
     result = api.parse_results(Path(output_path), backend=backend)
     return result.model_dump(mode="json", by_alias=True)
 
 
 def solarcell_get_artifact(run_id: str, artifact_type: str | None = None) -> dict[str, Any]:
     """Return artifacts for a run from the server-configured work directory."""
+    if mock.enabled():
+        return mock.get_artifact(run_id, artifact_type=artifact_type)
     return api.get_artifact(run_id, artifact_type=artifact_type)
 
 
@@ -174,6 +197,8 @@ def solarcell_build_layer_material_from_card(
     base_material: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Convert a MatContractServer SCAPS material card to a PySolarMCP layer material."""
+    if mock.enabled():
+        return mock.build_layer_material_from_card(card, base_material=base_material)
     return api.build_layer_material_from_scaps_card(card, base_material=base_material)
 
 
@@ -186,6 +211,15 @@ def solarcell_apply_scaps_material_card(
     preserve_existing: bool = True,
 ) -> dict[str, Any]:
     """Apply a SCAPS material card to one layer in a simulation case."""
+    if mock.enabled():
+        return mock.apply_scaps_material_card(
+            _mcp_case(case),
+            card,
+            layer_name=layer_name,
+            layer_index=layer_index,
+            role=role,
+            preserve_existing=preserve_existing,
+        )
     return api.apply_scaps_material_card_to_case(
         _mcp_case(case),
         card,

@@ -70,14 +70,6 @@ class ScapsBackend:
             )
         elif source.type == "template":
             diagnostics.extend(validate_template_source(source))
-        elif source.type == "generated":
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="scaps.definition_source_unsupported",
-                    message="Generated SCAPS definitions are reserved for a future renderer; use baseline_file or template.",
-                )
-            )
         elif source.path is None or not source.path.exists():
             diagnostics.append(
                 Diagnostic(

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from solarcell_sim.schema import SimulationResult
 from solarcell_sim_mcp.server import build_server, main as mcp_main
 import solarcell_sim_mcp.tools.core as tool_core
 from solarcell_sim_mcp.tools import (
@@ -206,3 +207,18 @@ def test_mcp_material_card_tools(sample_case_dict: dict) -> None:
     assert material["bandgapEv"] == 1.52
     assert applied["status"] == "success"
     assert applied["case"]["device"]["layers"][1]["material"]["electronAffinityEv"] == 4.28
+
+
+def test_solarcell_mcp_mock_mode_returns_schema_valid_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOLARCELL_SIM_MOCK_MODE", "1")
+    for key in ("SCAPS_EXECUTABLE_PATH", "SCAPS_DEFINITION_PATH", "SCAPS_WORKDIR"):
+        monkeypatch.delenv(key, raising=False)
+
+    baseline = solarcell_get_baseline_run(architecture="p-i-n", backend="scaps")
+    result = solarcell_run_case(baseline["case"], backend="scaps")
+
+    assert baseline["mock"] is True
+    assert result["diagnostics"][0]["code"] == "mock.enabled"
+    assert result["status"] == "success"
+    assert result["metrics"]["pcePercent"] is not None
+    SimulationResult.model_validate(result)

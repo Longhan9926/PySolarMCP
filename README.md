@@ -6,8 +6,8 @@ PySolarMCP wraps solar-cell device simulation behind two surfaces:
 - `solarcell_sim_mcp`: a thin MCP adapter that exposes selected core API calls to agents.
 
 P0 focuses on SCAPS through a baseline `.scaps` definition plus a generated script. The
-runner and artifacts are intentionally designed so a later release can generate `.scaps`
-definition files directly without changing the public API.
+backend registry and artifact layout are intentionally designed so later releases can add
+new simulators or direct `.scaps` generation with localized schema/API additions.
 
 ## Python usage
 
@@ -367,6 +367,10 @@ For remote deployment, prefer the HTTP URL configuration above instead of stdio.
 
 ### 5. Operational notes
 
+- Set `SOLARCELL_SIM_MOCK_MODE=1` or global `MCP_MOCK_MODE=1` on the server to
+  make MCP tools return schema-valid synthetic SCAPS results without preparing
+  files or launching SCAPS/Wine. Mock responses include an info diagnostic with
+  code `mock.enabled`.
 - `SCAPS_RUNTIME_STRATEGY=workspace_copy` is recommended for remote runs; generated
   runtime directories are cleaned after parsing while raw inputs, raw outputs, parsed
   CSV/JSON, and manifests are kept.

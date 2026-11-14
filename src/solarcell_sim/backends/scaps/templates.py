@@ -10,15 +10,9 @@ SUPPORTED_TEMPLATE_ARCHITECTURES = ("p-i-n", "n-i-p")
 AUTO_TEMPLATE_NAMES = {"", "auto", "architecture", "by-architecture"}
 
 _TEMPLATE_ALIASES = {
-    "pin": "p-i-n",
-    "p-i-n": "p-i-n",
-    "p_i_n": "p-i-n",
     "p-i-n-baseline": "p-i-n",
     "baseline-pin": "p-i-n",
     "baseline-p-i-n": "p-i-n",
-    "nip": "n-i-p",
-    "n-i-p": "n-i-p",
-    "n_i_p": "n-i-p",
     "n-i-p-baseline": "n-i-p",
     "baseline-nip": "n-i-p",
     "baseline-n-i-p": "n-i-p",

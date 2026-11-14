@@ -37,7 +37,7 @@ class ValidationReport(SolarModel):
 
 
 class DefinitionSource(SolarModel):
-    type: Literal["baseline_file", "generated", "template"] = "baseline_file"
+    type: Literal["baseline_file", "template"] = "baseline_file"
     path: Path | None = None
     template_name: str | None = None
     template_paths: dict[str, Path] = Field(default_factory=dict)
@@ -156,11 +156,11 @@ class Provenance(SolarModel):
 
 class SimulationInput(SolarModel):
     name: str
-    backend: Literal["scaps", "wxamps", "setfos", "custom_python", "surrogate_model"] = "scaps"
+    backend: Literal["scaps"] = "scaps"
     backend_options: BackendOptions = Field(default_factory=BackendOptions)
     device: SimulationDevice
     conditions: SimulationConditions
-    measurements: list[Literal["JV", "QE", "CV", "CF", "BANDS"]] = Field(default_factory=lambda: ["JV"])
+    measurements: list[Literal["JV"]] = Field(default_factory=lambda: ["JV"])
     sweep: SimulationSweep | None = None
     provenance: Provenance | None = None
 
@@ -252,7 +252,7 @@ class BackendStatus(SolarModel):
 
 
 class DefinitionArtifact(SolarModel):
-    source_type: Literal["baseline_file", "generated", "template"]
+    source_type: Literal["baseline_file", "template"]
     path: Path
     hash: str
 

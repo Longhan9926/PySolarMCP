@@ -47,17 +47,6 @@ class ScapsDefinitionRenderer:
             shutil.copy2(template.source_path, target)
             return DefinitionArtifact(source_type=source.type, path=target, hash=hash_file(target))
 
-        if source.type == "generated":
-            raise ConfigurationError(
-                "Generated SCAPS definitions are not implemented",
-                [
-                    Diagnostic(
-                        severity="error",
-                        code="scaps.definition_source_unsupported",
-                        message="Generated SCAPS definitions are reserved for a future renderer; use baseline_file or template.",
-                    )
-                ],
-            )
         if source.path is None or not source.path.exists():
             raise ConfigurationError(
                 f"SCAPS baseline definition does not exist: {source.path}",
@@ -148,13 +137,4 @@ class ScapsDefinitionRenderer:
             ]
         )
 
-        unsupported = sorted(set(case.measurements) - {"JV"})
-        if unsupported:
-            warnings.append(
-                Diagnostic(
-                    severity="warning",
-                    code="renderer.unsupported_measurements",
-                    message=f"P0 only generates JV scripts; unsupported measurements: {', '.join(unsupported)}",
-                )
-            )
         return commands, warnings
